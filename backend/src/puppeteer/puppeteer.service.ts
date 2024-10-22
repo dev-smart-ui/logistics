@@ -91,5 +91,67 @@ export class PuppeteerService {
   }
   
 
+  async scrapeAllPages(url: string, selector: string): Promise<any> {
+    try {
+      const browser = await puppeteer.launch({
+        args: ['--no-sandbox', '--disable-setuid-sandbox'],
+      });
+  
+      const page = await browser.newPage();
+      await page.goto(url, { waitUntil: 'networkidle0' });
+  
+      // Отримуємо заголовки колонок
+      const headers = await page.evaluate(() => {
+        return Array.from(document.querySelectorAll('table thead th')).map(th => th.textContent?.trim() || '');
+      });
+  
+      let allRows: string[][] = []; // Для збереження всіх рядків
+      let hasNextPage = true; // Флаг для перевірки наявності наступної сторінки
+  
+      while (hasNextPage) {
+        // Отримуємо рядки таблиці на поточній сторінці
+        const rows = await page.evaluate((targetCity) => {
+          const rows = Array.from(document.querySelectorAll('table tbody tr'));
+          return rows
+            .map(row => {
+              const cells = Array.from(row.querySelectorAll('td')).map(cell => cell.textContent?.trim() || '');
+              if (cells.includes(targetCity)) {
+                return cells;
+              }
+              return null;
+            })
+            .filter(row => row !== null);
+        }, selector);
+  
+        // Додаємо рядки з поточної сторінки до загального масиву
+        allRows.push(...rows);
+  
+        // Перевіряємо наявність кнопки "Наступна сторінка" та переходимо до неї
+        hasNextPage = await page.evaluate(() => {
+          const nextButton = document.querySelector('button[aria-label="Next page"]');
+          if (nextButton && !nextButton.hasAttribute('disabled')) {
+            (nextButton as HTMLElement).click();
+            return true;
+          }
+          return false;
+        });
+  
+        // Чекаємо на завантаження нових рядків, якщо є наступна сторінка
+        if (hasNextPage) {
+          await page.waitForSelector('table tbody tr'); // Очікуємо на завантаження нових рядків
+        }
+      }
+  
+      await browser.close();
+  
+      // Повертаємо дані разом із заголовками колонок
+      return { headers, rows: allRows };
+    } catch (err) {
+      console.error('Error:', err);
+      return { headers: [], rows: [] };
+    }
+  }
+  
+  
 }
 

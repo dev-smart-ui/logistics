@@ -10,6 +10,6 @@ export class PuppeteerController {
     @Body('url') url: string,
     @Body('selector') selector: string
   ): Promise<any> {
-    return this.puppeteerService.scrapeData(url, selector);
+    return this.puppeteerService.scrapeAllPages(url, selector);
   }
 }
