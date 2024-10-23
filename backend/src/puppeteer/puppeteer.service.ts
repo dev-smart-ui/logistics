@@ -1,9 +1,17 @@
-import { Injectable } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import * as puppeteer from 'puppeteer';
+import { TelegramService } from 'src/telegram/telegram.service';
+import { Redis } from 'ioredis';
+import { Injectable, Inject } from '@nestjs/common';
+
 
 @Injectable()
 export class PuppeteerService {
+  constructor(
+    private readonly telegramService: TelegramService,
+    @Inject('REDIS_CLIENT') private readonly redisClient: Redis,
+  ) {}
+
   // @Cron(CronExpression.EVERY_MINUTE)
   // async scheduledScrape(): Promise<void> {
   //   const site = 'https://metabase.app.relaytms.com/public/question/760017e9-979a-4f47-a820-736ab4e7e797?ready_date='
@@ -13,82 +21,48 @@ export class PuppeteerService {
   //   console.log(data)
   // }
 
+
   // async scrapeData(url: string, selector: string): Promise<any> {
   //   try {
-  //     const browser = await puppeteer.launch();
+  //     const browser = await puppeteer.launch({
+  //       args: ['--no-sandbox', '--disable-setuid-sandbox'],
+  //     });
+
   //     const page = await browser.newPage();
   
-  //     // Переходимо на потрібну сторінку
-  //     await page.goto(url, { waitUntil: 'networkidle0' }); // Чекаємо на завершення всіх запитів мережі
-    
-  //     // Витягуємо дані з колонки 1st Pick City
-  //     const pickCities = await page.evaluate(() => {
-  //       const rows = Array.from(document.querySelectorAll('table tbody tr'));
-  //       // const headers = Array.from(document.querySelectorAll('table thead tr'));
-
-  //       return {
-  //         value: rows.map(row => {
-  //           const cell = row.querySelector('td:nth-child(6)');
-  //           return (cell as HTMLElement)?.innerText || ""; // Приведення до HTMLElement та витягуємо текст
-  //         }),
-  //         // header: headers.map(row => {
-  //         //   const cell = row.querySelector('th:nth-child(6)');
-  //         //   return (cell as HTMLElement)?.innerText || "";
-  //         // }),
-  //       }
+  //     await page.goto(url, { waitUntil: 'networkidle0' });
+  
+  //     // Отримуємо заголовки колонок
+  //     const headers = await page.evaluate(() => {
+  //       return Array.from(document.querySelectorAll('table thead th')).map(th => th.textContent?.trim() || '');
   //     });
-    
-  //     // Закриваємо браузер
+  
+  //     // Отримуємо рядки таблиці
+  //     const rows = await page.evaluate((targetCity) => {
+  //       const rows = Array.from(document.querySelectorAll('table tbody tr'));
+  
+  //       let matchingRows = rows
+  //         .map(row => {
+  //           const cells = Array.from(row.querySelectorAll('td')).map(cell => cell.textContent?.trim() || '');
+  //           if (cells.includes(targetCity)) {
+  //             return cells;
+  //           }
+  //           return null;
+  //         })
+  //         .filter(row => row !== null);
+  
+  //       return matchingRows;
+  //     }, selector);
+  
   //     await browser.close();
   
-  //     return pickCities;
+  //     // Повертаємо дані разом із заголовками колонок
+  //     return { headers, rows };
   //   } catch (err) {
-  //     console.log('Error:', err);
-  //     return [];
+  //     console.error('Error:', err);
+  //     return { headers: [], rows: [] };
   //   }
   // }
-
-  async scrapeData(url: string, selector: string): Promise<any> {
-    try {
-      const browser = await puppeteer.launch({
-        args: ['--no-sandbox', '--disable-setuid-sandbox'],
-      });
-
-      const page = await browser.newPage();
-  
-      await page.goto(url, { waitUntil: 'networkidle0' });
-  
-      // Отримуємо заголовки колонок
-      const headers = await page.evaluate(() => {
-        return Array.from(document.querySelectorAll('table thead th')).map(th => th.textContent?.trim() || '');
-      });
-  
-      // Отримуємо рядки таблиці
-      const rows = await page.evaluate((targetCity) => {
-        const rows = Array.from(document.querySelectorAll('table tbody tr'));
-  
-        let matchingRows = rows
-          .map(row => {
-            const cells = Array.from(row.querySelectorAll('td')).map(cell => cell.textContent?.trim() || '');
-            if (cells.includes(targetCity)) {
-              return cells;
-            }
-            return null;
-          })
-          .filter(row => row !== null);
-  
-        return matchingRows;
-      }, selector);
-  
-      await browser.close();
-  
-      // Повертаємо дані разом із заголовками колонок
-      return { headers, rows };
-    } catch (err) {
-      console.error('Error:', err);
-      return { headers: [], rows: [] };
-    }
-  }
   
 
   async scrapeAllPages(url: string, selector: string): Promise<any> {
@@ -143,6 +117,19 @@ export class PuppeteerService {
       }
   
       await browser.close();
+
+      // await this.telegramService.sendMessage('Знайдено нові дані: ...');
+      for (const row of allRows) {
+        const orderId = row[1]; // Booking ID
+        const isSent = await this.redisClient.get(orderId);
+
+        if (!isSent) {
+          // Якщо повідомлення про це замовлення ще не відправлено
+          await this.telegramService.sendMessage(`Знайдено нове замовлення: ${selector} - ${orderId}`);
+          await this.redisClient.set(orderId, 'sent', 'EX', 24 * 60 * 60); // Збережіть ID в Redis на 24 години
+        }
+      }
+
   
       // Повертаємо дані разом із заголовками колонок
       return { headers, rows: allRows };
@@ -151,7 +138,5 @@ export class PuppeteerService {
       return { headers: [], rows: [] };
     }
   }
-  
-  
 }
 
