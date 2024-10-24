@@ -8,6 +8,19 @@ export default function Home() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [isAutoRefreshing, setIsAutoRefreshing] = useState(false);
+  // Стан логіну
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [loginError, setLoginError] = useState('');
+
+  // Перевірка логіну при завантаженні сторінки
+  useEffect(() => {
+    const savedLoggedIn = localStorage.getItem('isLoggedIn');
+    if (savedLoggedIn === 'true') {
+      setIsLoggedIn(true);
+    }
+  }, []);
 
   // Відновлення значень з localStorage при завантаженні сторінки
   useEffect(() => {
@@ -36,6 +49,26 @@ export default function Home() {
     }
     return () => clearInterval(interval);
   }, [isAutoRefreshing, url, selector]);
+
+  // Функція для обробки логіну
+  const handleLogin = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+
+    // Простий приклад перевірки логіну (замість реальної аутентифікації)
+    if (username === 'dev@smart-ui.pro' && password === 'DevLogistics2024!') {
+      setIsLoggedIn(true);
+      localStorage.setItem('isLoggedIn', 'true'); // Зберігаємо стан логіну
+      setLoginError('');
+    } else {
+      setLoginError('Невірне ім\'я користувача або пароль');
+    }
+  };
+
+  // Логаут
+  const handleLogout = () => {
+    setIsLoggedIn(false);
+    localStorage.removeItem('isLoggedIn');
+  };
 
   const handleSubmit = async (e?: React.FormEvent<HTMLFormElement>) => {
     if (e) e.preventDefault();
@@ -77,6 +110,34 @@ export default function Home() {
     localStorage.removeItem('selector');
   };
 
+  if (!isLoggedIn) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen p-4">
+        <h2 className="text-2xl mb-4">Логін</h2>
+        <form onSubmit={handleLogin} className="flex flex-col gap-4 w-full max-w-[400px]">
+          <input
+            type="text"
+            placeholder="Ім'я користувача"
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
+            className="border p-2"
+          />
+          <input
+            type="password"
+            placeholder="Пароль"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            className="border p-2"
+          />
+          {loginError && <p className="text-red-500">{loginError}</p>}
+          <button type="submit" className="bg-blue-500 text-white p-2">
+            Увійти
+          </button>
+        </form>
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col items-center min-h-screen p-4">
       <form onSubmit={handleSubmit} className="mb-4 w-full flex items-end justify-center gap-4 mt-10">
@@ -108,9 +169,8 @@ export default function Home() {
         {/* Кнопка "Пошук..." */}
         <button
           type="submit"
-          className={`p-2 w-40 h-[41px] text-white ${
-            isAutoRefreshing ? 'bg-blue-500 opacity-50 cursor-not-allowed' : 'bg-blue-500'
-          }`}
+          className={`p-2 w-40 h-[41px] text-white ${isAutoRefreshing ? 'bg-blue-500 opacity-50 cursor-not-allowed' : 'bg-blue-500'
+            }`}
           disabled={isAutoRefreshing || loading}
         >
           {isAutoRefreshing ? 'Пошук...' : 'Шукати'}
@@ -120,9 +180,8 @@ export default function Home() {
         <button
           type="button"
           onClick={stopAutoRefresh}
-          className={`p-2 w-40 h-[41px] text-white ${
-            !isAutoRefreshing ? 'bg-red-500 opacity-50 cursor-not-allowed' : 'bg-red-500'
-          }`}
+          className={`p-2 w-40 h-[41px] text-white ${!isAutoRefreshing ? 'bg-red-500 opacity-50 cursor-not-allowed' : 'bg-red-500'
+            }`}
           disabled={!isAutoRefreshing}
         >
           Зупинити
@@ -149,9 +208,8 @@ export default function Home() {
                   {row.map((cell, cellIndex) => (
                     <td
                       key={cellIndex}
-                      className={`border px-4 py-2 whitespace-nowrap ${
-                        cell === selector ? 'bg-yellow-200 font-bold' : ''
-                      }`}
+                      className={`border px-4 py-2 whitespace-nowrap ${cell === selector ? 'bg-yellow-200 font-bold' : ''
+                        }`}
                     >
                       {cell}
                     </td>
